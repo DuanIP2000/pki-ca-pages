@@ -49,7 +49,7 @@
         }
         
         .input-focus:focus {
-            transform: translateY(-2px);
+            transform: none;
             box-shadow: 0 10px 25px rgba(0, 0, 0, 0.1);
         }
         
@@ -69,6 +69,14 @@
         @keyframes security-pulse {
             0%, 100% { opacity: 0.7; }
             50% { opacity: 1; }
+        }
+
+        input, textarea {
+            caret-color: #0f172a;
+        }
+
+        .input-icon-overlay {
+            pointer-events: none;
         }
     </style>
 </head>
@@ -110,7 +118,7 @@
                             placeholder="请输入用户名"
                             required
                         >
-                        <div class="absolute inset-y-0 right-0 pr-3 flex items-center">
+                        <div class="absolute inset-y-0 right-0 pr-3 flex items-center input-icon-overlay">
                             <i class="fas fa-user text-slate-400"></i>
                         </div>
                     </div>
