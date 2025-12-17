@@ -67,7 +67,7 @@
                 this.init();
             }
             init(){
-                // if(!this.jwt){window.location.href='./login.html';return}
+                if(!this.jwt){window.location.href='./login.html';return}
                 const welcome=document.getElementById('welcomeText');
                 if(welcome&&this.username)welcome.textContent=`欢迎，${this.username}`;
                 this.applyRequests=[];
@@ -125,7 +125,7 @@
                                 <div class='text-slate-900 font-semibold'>${label} #${x.requestId}</div>
                                 <div class='text-slate-600 text-sm'>用户：${x.username || '-'}</div>
                                 ${x.type==='revoke' ? `<div class='text-slate-600 text-sm'>原因：${x.reason || '-'}</div>` : ''}
-                                <div class='text-slate-600 text-sm'>时间：${x.requestTime || '-'}</div>
+                                <div class='text-slate-600 text-sm'>时间：${this.fmt(x.requestTime) || '-'}</div>
                                 <div class='text-slate-600 text-sm'>状态：${x.status || '-'}</div>
                             </div>
                             <div class='flex gap-2'>
@@ -176,7 +176,7 @@
                 items.forEach(u=>{
                     const row = document.createElement('div');
                     row.className='border border-slate-200 rounded-lg p-3 bg-white';
-                    row.innerHTML=`<div class='flex justify-between items-center'><div><div class='text-slate-900 font-medium'>${u.username||'-'}</div><div class='text-slate-600 text-sm'>角色：${u.role||'-'}</div></div><div class='text-slate-700 text-sm'>注册：${u.registerTime||'-'}</div></div>`;
+                    row.innerHTML=`<div class='flex justify-between items-center'><div><div class='text-slate-900 font-medium'>${u.username||'-'}</div><div class='text-slate-600 text-sm'>角色：${u.role||'-'}</div></div><div class='text-slate-700 text-sm'>注册：${this.fmt(u.registerTime)||'-'}</div></div>`;
                     list.appendChild(row);
                 });
             }
@@ -192,10 +192,23 @@
                     items.forEach(l=>{
                         const row = document.createElement('div');
                         row.className='border border-slate-200 rounded-lg p-3 bg-white';
-                        row.innerHTML=`<div class='flex justify之间 items-center'><div><div class='text-slate-900 font-medium'>${l.action||'-'}</div><div class='text-slate-600 text-sm'>目标：${l.target||'-'} | 操作人：${l.operator||'-'}</div></div><div class='text-slate-700 text-sm'>时间：${l.actionTime||'-'}</div></div>`;
+                        row.innerHTML=`<div class='flex justify之间 items-center'><div><div class='text-slate-900 font-medium'>${l.action||'-'}</div><div class='text-slate-600 text-sm'>目标：${l.target||'-'} | 操作人：${l.operator||'-'}</div></div><div class='text-slate-700 text-sm'>时间：${this.fmt(l.actionTime)||'-'}</div></div>`;
                         list.appendChild(row);
                     });
                 }catch(e){ document.getElementById('logsList').innerHTML = '<div class="text-slate-600 text-sm">加载失败</div>'; }
+            }
+
+            fmt(s){
+                if(!s) return '';
+                const d=new Date(s);
+                if(isNaN(d.getTime())) return s;
+                const yy=String(d.getFullYear()).slice(-2);
+                const MM=String(d.getMonth()+1).padStart(2,'0');
+                const dd=String(d.getDate()).padStart(2,'0');
+                const hh=String(d.getHours()).padStart(2,'0');
+                const mm=String(d.getMinutes()).padStart(2,'0');
+                const ss=String(d.getSeconds()).padStart(2,'0');
+                return `${yy}年${MM}月${dd}日：${hh}时${mm}分${ss}秒`;
             }
         }
         document.addEventListener('DOMContentLoaded',()=>{new AdminConsole()});
