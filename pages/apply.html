@@ -167,20 +167,42 @@
                         return;
                     }
 
-                    const response = await fetch(`${this.baseURL}/api/certificates/apply`, {
+                    // 获取 CSR Challenge（绑定本次申请）
+                    const chResp = await fetch(`${this.baseURL}/api/certificates/csr/challenge`, {
+                        method: 'POST',
+                        headers: {
+                            'Authorization': `Bearer ${this.jwt}`
+                        }
+                    });
+                    const chData = await chResp.json();
+                    if (!chData || !chData.success || !chData.data) {
+                        this.showStatus((chData && chData.message) || '获取CSR挑战失败', 'error');
+                        return;
+                    }
+                    const csrChallenge = chData.data;
+
+                    // 使用申请私钥对 CSR challenge 进行签名
+                    const sig = await this.signChallenge(privateKeyContent, csrChallenge);
+                    if (!sig) {
+                        this.showStatus('CSR挑战签名失败', 'error');
+                        return;
+                    }
+
+                    // 提交 CSR 申请
+                    const response = await fetch(`${this.baseURL}/api/certificates/apply-request`, {
                         method: 'POST',
                         headers: {
                             'Content-Type': 'application/json',
                             'Authorization': `Bearer ${this.jwt}`
                         },
-                        body: JSON.stringify({ csr: csrPEM, validityDays })
+                        body: JSON.stringify({ csrPem: csrPEM, csrSignature: sig })
                     });
                     const data = await response.json();
                     if (data && data.success) {
-                        this.lastCertId = data.data;
-                        this.showStatus(`申请成功！证书ID：${this.lastCertId}`, 'success');
+                        const requestId = data.data;
+                        this.showStatus(`申请提交成功！申请ID：${requestId}`, 'success');
                         const s = document.getElementById('applyStatus');
-                        if (s) s.textContent = `新证书ID：${this.lastCertId}`;
+                        if (s) s.textContent = `新申请ID：${requestId}`;
                         await this.loadMyCertificates();
                     } else {
                         this.showStatus((data && data.message) || '申请失败', 'error');
@@ -214,7 +236,7 @@
 
             async loadMyCertificates() {
                 try {
-                    const resp = await fetch(`${this.baseURL}/api/certificates`, { headers: { 'Authorization': `Bearer ${this.jwt}` } });
+                    const resp = await fetch(`${this.baseURL}/api/certificates/my`, { headers: { 'Authorization': `Bearer ${this.jwt}` } });
                     const data = await resp.json();
                     if (data && data.success) {
                         this.myCerts = Array.isArray(data.data) ? data.data : [];
@@ -272,6 +294,7 @@
                     }
                 } catch {}
                 let subject = '', issuer = '', sigAlg = '';
+                // 普通用户的 my 列表通常不含 certId，无法下载 PEM；解析以 verify 信息为主
                 try {
                     if (item.certId) {
                         const resp = await fetch(`${this.baseURL}/api/certificates/${item.certId}/download`, { headers: { 'Authorization': `Bearer ${this.jwt}` } });
@@ -293,22 +316,21 @@
             }
 
             async revokeCertificate(item) {
-                if (!item || !item.certId) return;
+                if (!item || !item.serialNumber) return;
                 try {
-                    const resp = await fetch(`${this.baseURL}/api/crl/revoke`, {
+                    const resp = await fetch(`${this.baseURL}/api/certificates/${item.serialNumber}/revoke-request`, {
                         method: 'POST',
                         headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${this.jwt}` },
-                        body: JSON.stringify({ certId: item.certId, reason: 'keyCompromise' })
+                        body: JSON.stringify({ reason: 'keyCompromise' })
                     });
                     const data = await resp.json();
                     if (data && data.success) {
-                        this.showStatus('吊销成功', 'success');
-                        await this.loadMyCertificates();
+                        this.showStatus('吊销申请已提交', 'success');
                     } else {
-                        this.showStatus((data && data.message) || '吊销失败', 'error');
+                        this.showStatus((data && data.message) || '吊销申请失败', 'error');
                     }
                 } catch (e) {
-                    this.showStatus('吊销请求失败', 'error');
+                    this.showStatus('吊销申请请求失败', 'error');
                 }
             }
 
