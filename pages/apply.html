@@ -72,7 +72,7 @@
                     <div class="bg-sky-100 text-sky-700 px-3 py-1 rounded-full text-sm font-medium">解析结果</div>
                 </div>
                 <div class="space-y-2 text-slate-800">
-                    <div>主题：<span id="parseSubject" class="font-medium"></span></div>
+                    <div>主体：<span id="parseSubject" class="font-medium"></span></div>
                     <div>颁发者：<span id="parseIssuer" class="font-medium"></span></div>
                     <div>序列号：<span id="parseSerial" class="font-medium"></span></div>
                     <div>有效期起：<span id="parseValidFrom" class="font-medium"></span></div>
@@ -214,20 +214,34 @@
                 }
             }
 
+            async signChallenge(privateKeyPEM, message) {
+                try {
+                    const keyObj = KEYUTIL.getKey(privateKeyPEM);
+                    const sig = new KJUR.crypto.Signature({ alg: 'SHA256withRSA' });
+                    sig.init(keyObj);
+                    sig.updateString(message);
+                    const sigHex = sig.sign();
+                    return hextob64(sigHex);
+                } catch (e) {
+                    console.error('CSR challenge sign error', e);
+                    return null;
+                }
+            }
+
             async generateCSR(privateKeyPEM, cn, c, email) {
                 try {
                     const prv = KEYUTIL.getKey(privateKeyPEM);
                     const pub = new RSAKey();
-                    pub.n = prv.n; // 复制模数
-                    pub.e = prv.e; // 复制公钥指数
+                    pub.n = prv.n;
+                    pub.e = prv.e;
                     const subjectStr = `/CN=${cn}/C=${c}` + (email ? `/emailAddress=${email}` : '');
-                    const csr = new KJUR.asn1.csr.CertificationRequest({
+                    const csrPEM = KJUR.asn1.csr.CSRUtil.newCSRPEM({
                         subject: { str: subjectStr },
                         sbjpubkey: pub,
                         sigalg: 'SHA256withRSA',
-                        prvkeyobj: prv
+                        sbjprvkey: prv
                     });
-                    return csr.getPEMString();
+                    return csrPEM;
                 } catch (e) {
                     console.error('CSR generation error', e);
                     return null;
@@ -289,8 +303,8 @@
                     const verifyData = await verifyResp.json();
                     if (verifyData && verifyData.success) {
                         status = verifyData.data && verifyData.data.status ? verifyData.data.status : '';
-                        document.getElementById('parseValidFrom').textContent = (verifyData.data && verifyData.data.validFrom) || '';
-                        document.getElementById('parseValidTo').textContent = (verifyData.data && verifyData.data.validTo) || '';
+                        document.getElementById('parseValidFrom').textContent = this.formatCNTime((verifyData.data && verifyData.data.validFrom) || '');
+                        document.getElementById('parseValidTo').textContent = this.formatCNTime((verifyData.data && verifyData.data.validTo) || '');
                     }
                 } catch {}
                 let subject = '', issuer = '', sigAlg = '';
@@ -313,6 +327,19 @@
                 document.getElementById('parseSerial').textContent = serial || '';
                 document.getElementById('parseAlg').textContent = sigAlg;
                 document.getElementById('parseStatus').textContent = status || '';
+            }
+
+            formatCNTime(s) {
+                if (!s) return '';
+                const d = new Date(s);
+                if (isNaN(d.getTime())) return s;
+                const yy = String(d.getFullYear()).slice(-2);
+                const MM = String(d.getMonth() + 1).padStart(2, '0');
+                const dd = String(d.getDate()).padStart(2, '0');
+                const hh = String(d.getHours()).padStart(2, '0');
+                const mm = String(d.getMinutes()).padStart(2, '0');
+                const ss = String(d.getSeconds()).padStart(2, '0');
+                return `${yy}年${MM}月${dd}日：${hh}时${mm}分${ss}秒`;
             }
 
             async revokeCertificate(item) {
