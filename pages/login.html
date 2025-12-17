@@ -400,7 +400,11 @@
                 this.showStatus('登录成功！正在跳转...', 'success');
                 
                 setTimeout(() => {
-                    window.location.href = './apply.html';
+                    if (username === 'Alan') {
+                        window.location.href = './admin.html';
+                    } else {
+                        window.location.href = './apply.html';
+                    }
                 }, 1500);
             }
 
