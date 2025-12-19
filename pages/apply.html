@@ -277,10 +277,11 @@
 
         async loadMyCertificates() {
             try {
-                const resp = await fetch(`./api/certificates/my`, { headers: { 'Authorization': `Bearer ${this.jwt}` } });
+                const resp = await fetch(`./api/certificates`, { headers: { 'Authorization': `Bearer ${this.jwt}` } });
                 const data = await resp.json();
-                if (data && data.success) {
-                    this.myCerts = Array.isArray(data.data) ? data.data : [];
+                if (data && data.success && Array.isArray(data.data)) {
+                    const mine = data.data.filter(c => c && c.user && c.user.username === this.username);
+                    this.myCerts = mine;
                     this.myCertsBySerial.clear();
                     this.myCerts.forEach(c => { if (c.serialNumber) this.myCertsBySerial.set(c.serialNumber, c); });
                     this.renderList(this.myCerts, true);
