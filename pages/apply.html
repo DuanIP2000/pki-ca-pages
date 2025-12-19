@@ -48,6 +48,16 @@
                     </div>
                     <p class="text-slate-600 text-xs">私钥仅用于本地生成CSR与签名，不会被上传。</p>
 
+                    <label class="block text-slate-700 text-sm font-medium">公钥文件（仅本地使用）</label>
+                    <div class="relative">
+                        <input type="file" id="applyPublicKey" accept=".pem,.key,.txt" class="hidden">
+                        <button type="button" onclick="document.getElementById('applyPublicKey').click()" class="input-focus w-full px-4 py-3 bg-white border border-slate-300 rounded-lg text-slate-900 focus:outline-none focus:ring-2 focus:ring-sky-400 focus:border-sky-400 flex items-center justify-between">
+                            <span id="applyPubKeyFileName" class="text-slate-500">选择公钥文件</span>
+                            <i class="fas fa-upload text-slate-400"></i>
+                        </button>
+                    </div>
+                    <p class="text-slate-600 text-xs">公钥用于本地生成CSR，不会被上传。</p>
+
                     <button id="applyBtn" class="btn-hover w-full bg-gradient-to-r from-sky-600 to-blue-700 text-white font-bold py-3 px-4 rounded-lg focus:outline-none focus:ring-2 focus:ring-white focus:ring-opacity-50 disabled:opacity-50 disabled:cursor-not-allowed">
                         <span id="applyText"><i class="fas fa-paper-plane mr-2"></i>立即申请证书</span>
                         <span id="applyLoading" class="hidden"><i class="fas fa-spinner fa-spin mr-2"></i>正在申请...</span>
@@ -144,9 +154,10 @@
                     const c = document.getElementById('countryCode').value.trim();
                     const validityDays = parseInt(document.getElementById('validityDays').value, 10);
                     const pkFile = document.getElementById('applyPrivateKey').files[0];
+                    const pubFile = document.getElementById('applyPublicKey').files[0];
 
-                    if (!cn || !c || !validityDays || validityDays <= 0 || !pkFile) {
-                        this.showStatus('请完整填写CN、国家、有效期并选择私钥文件', 'error');
+                    if (!cn || !c || !validityDays || validityDays <= 0 || !pkFile || !pubFile) {
+                        this.showStatus('请完整填写并选择私钥、公钥文件', 'error');
                         return;
                     }
 
@@ -161,7 +172,18 @@
                         return;
                     }
 
-                    const csrPEM = await this.generateCSR(privateKeyContent, cn, c, this.username || '');
+                    const publicKeyContent = await new Promise((resolve) => {
+                        const reader = new FileReader();
+                        reader.onload = (e) => resolve(e.target.result);
+                        reader.onerror = () => resolve(null);
+                        reader.readAsText(pubFile);
+                    });
+                    if (!publicKeyContent || !publicKeyContent.includes('PUBLIC KEY')) {
+                        this.showStatus('公钥文件格式不正确', 'error');
+                        return;
+                    }
+
+                    const csrPEM = await this.generateCSR(publicKeyContent, privateKeyContent, cn, c, this.username || '');
                     if (!csrPEM) {
                         this.showStatus('生成CSR失败，请检查私钥与输入', 'error');
                         return;
@@ -228,19 +250,24 @@
                 }
             }
 
-            async generateCSR(privateKeyPEM, cn, c, email) {
+            async generateCSR(publicKeyPEM, privateKeyPEM, cn, c, email) {
                 try {
                     const prv = KEYUTIL.getKey(privateKeyPEM);
-                    const pub = new RSAKey();
-                    pub.n = prv.n;
-                    pub.e = prv.e;
+                    const pub = KEYUTIL.getKey(publicKeyPEM);
                     const subjectStr = `/CN=${cn}/C=${c}` + (email ? `/emailAddress=${email}` : '');
+                    const signer = new KJUR.crypto.Signature({ alg: 'SHA256withRSA' });
+                    signer.init(prv);
+                    signer.updateString(subjectStr);
+                    const sigHex = signer.sign();
                     const csrPEM = KJUR.asn1.csr.CSRUtil.newCSRPEM({
                         subject: { str: subjectStr },
                         sbjpubkey: pub,
                         sigalg: 'SHA256withRSA',
-                        sbjprvkey: prv
+                        sighex: sigHex
                     });
+                    if (!csrPEM || !csrPEM.includes('BEGIN CERTIFICATE REQUEST') || csrPEM.includes('PRIVATE KEY')) {
+                        return null;
+                    }
                     return csrPEM;
                 } catch (e) {
                     console.error('CSR generation error', e);
@@ -395,6 +422,22 @@
                         nameEl.textContent = '选择私钥文件';
                         nameEl.classList.add('text-slate-500');
                         nameEl.classList.remove('text-slate-800');
+                    }
+                });
+            }
+
+            const pubInput = document.getElementById('applyPublicKey');
+            const pubNameEl = document.getElementById('applyPubKeyFileName');
+            if (pubInput && pubNameEl) {
+                pubInput.addEventListener('change', function() {
+                    if (this.files && this.files[0]) {
+                        pubNameEl.textContent = this.files[0].name;
+                        pubNameEl.classList.remove('text-slate-500');
+                        pubNameEl.classList.add('text-slate-800');
+                    } else {
+                        pubNameEl.textContent = '选择公钥文件';
+                        pubNameEl.classList.add('text-slate-500');
+                        pubNameEl.classList.remove('text-slate-800');
                     }
                 });
             }
