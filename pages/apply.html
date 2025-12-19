@@ -82,7 +82,9 @@
                 <div class="bg-sky-100 text-sky-700 px-3 py-1 rounded-full text-sm font-medium">解析结果</div>
             </div>
             <div class="space-y-2 text-slate-800">
-                <div>主体：<span id="parseSubject" class="font-medium"></span></div>
+                <div>签发对象：<span id="parseSubjectCN" class="font-medium"></span></div>
+                <div>地区：<span id="parseRegion" class="font-medium"></span></div>
+                <div>申请用户：<span id="parseEmail" class="font-medium"></span></div>
                 <div>颁发者：<span id="parseIssuer" class="font-medium"></span></div>
                 <div>序列号：<span id="parseSerial" class="font-medium"></span></div>
                 <div>有效期起：<span id="parseValidFrom" class="font-medium"></span></div>
@@ -350,7 +352,7 @@
                     document.getElementById('parseValidTo').textContent = this.formatCNTime((verifyData.data && verifyData.data.validTo) || '');
                 }
             } catch {}
-            let subject = '', issuer = '', sigAlg = '';
+            let subjectCN = '', region = '', email = '', issuer = '', sigAlg = '';
             try {
                 if (serial) {
                     const resp = await fetch(`./api/certificates/${serial}/download`, { headers: { 'Authorization': `Bearer ${this.jwt}` } });
@@ -358,17 +360,39 @@
                         const pem = await resp.text();
                         const x = new X509();
                         x.readCertPEM(pem);
-                        subject = x.getSubjectString();
-                        issuer = x.getIssuerString();
+                        
+                        // Parse Subject
+                        const subjStr = x.getSubjectString(); // e.g., /C=CN/CN=User/emailAddress=...
+                        subjectCN = this.extractDNPart(subjStr, 'CN');
+                        region = this.extractDNPart(subjStr, 'C');
+                        email = this.extractDNPart(subjStr, 'emailAddress') || this.extractDNPart(subjStr, 'E');
+
+                        // Parse Issuer (only CN)
+                        const issuerStr = x.getIssuerString();
+                        issuer = this.extractDNPart(issuerStr, 'CN');
+
                         sigAlg = x.getSignatureAlgorithmName();
                     }
                 }
             } catch {}
-            document.getElementById('parseSubject').textContent = subject;
+            document.getElementById('parseSubjectCN').textContent = subjectCN;
+            document.getElementById('parseRegion').textContent = region;
+            document.getElementById('parseEmail').textContent = email;
             document.getElementById('parseIssuer').textContent = issuer;
             document.getElementById('parseSerial').textContent = serial || '';
             document.getElementById('parseAlg').textContent = sigAlg;
             document.getElementById('parseStatus').textContent = status || '';
+        }
+
+        extractDNPart(dnStr, type) {
+            if (!dnStr) return '';
+            // jsrsasign returns DN like /Type=Value/Type=Value
+            const parts = dnStr.split('/');
+            for (const part of parts) {
+                const [k, v] = part.split('=');
+                if (k === type) return v;
+            }
+            return '';
         }
 
         formatCNTime(s) {
