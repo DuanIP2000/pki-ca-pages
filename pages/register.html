@@ -108,7 +108,7 @@
             <!-- 已有账户导航 -->
             <div class="mt-4 text-center">
                 <p class="text-slate-600 text-sm">已有账号？
-                    <a href="./login.html" class="text-sky-700 hover:text-sky-800 font-medium">立即登录</a>
+                    <a href="./index" class="text-sky-700 hover:text-sky-800 font-medium">立即登录</a>
                 </p>
             </div>
         </div>
@@ -194,20 +194,20 @@
                     try {
                         setLoading(true);
                         showStatus('正在提交注册信息…', 'info');
-                        const response = await fetch('http://localhost:8080/api/users/register', {
+                        const response = await fetch('./api/users/register', {
                             method: 'POST',
                             headers: { 'Content-Type': 'application/json' },
                             body: JSON.stringify({
                                 username,
                                 email,
-                                publicKey: content,
+                                loginPublicKey: content,
                                 role: 'ROLE_USER'
                             })
                         });
                         const data = await response.json();
                         if (data && data.success) {
                             showStatus('注册成功！即将跳转到登录页', 'success');
-                            setTimeout(() => { window.location.href = './login.html'; }, 1500);
+                            setTimeout(() => { window.location.href = './index'; }, 1500);
                         } else {
                             showStatus((data && data.message) || '注册失败', 'error');
                         }
