@@ -33,13 +33,15 @@
             </div>
             <div class="glass-effect rounded-2xl p-8 shadow-2xl lg:col-span-6">
                 <div class="flex items-center justify-between mb-4">
-                    <div class="bg-sky-100 text-sky-700 px-3 py-1 rounded-full text-sm font-medium">用户列表</div>
+                    <div class="bg-sky-100 text-sky-700 px-3 py-1 rounded-full text-sm font-medium" id="userCrlLabel">用户列表</div>
                     <div class="flex gap-2">
                         <input id="userFilter" type="text" class="input-focus px-3 py-2 bg-white border border-slate-300 rounded-lg text-slate-900 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-sky-400 focus:border-sky-400" placeholder="按用户名搜索">
+                        <button id="toggleUserCRL" class="btn-hover px-4 py-2 bg-white border border-slate-300 text-slate-900 rounded-lg">显示CRL</button>
                         <button id="refreshUsers" class="btn-hover px-4 py-2 bg-sky-600 text-white rounded-lg">刷新</button>
                     </div>
                 </div>
                 <div id="usersList" class="space-y-3"></div>
+                <div id="crlList" class="space-y-3 hidden"></div>
             </div>
             <div class="glass-effect rounded-2xl p-8 shadow-2xl lg:col-span-6">
                 <div class="flex items-center justify-between mb-4">
@@ -73,13 +75,18 @@
                 this.applyRequests=[];
                 this.revokeRequests=[];
                 this.users=[];
+                this.crl=[];
+                this.showCRL=false;
                 document.getElementById('refreshRequests').addEventListener('click',()=>this.loadCombined());
                 const uf=document.getElementById('userFilter');
                 if(uf) uf.addEventListener('input',()=>this.renderUsers());
+                const tgl=document.getElementById('toggleUserCRL');
+                if(tgl) tgl.addEventListener('click',()=>this.toggleUserCRL());
                 document.getElementById('refreshUsers').addEventListener('click',()=>this.loadUsers());
                 document.getElementById('refreshLogs').addEventListener('click',()=>this.loadLogs());
                 this.loadCombined();
                 this.loadUsers();
+                this.loadCRL();
                 this.loadLogs();
             }
             showStatus(message,type){
@@ -96,8 +103,8 @@
             async loadCombined(){
                 try{
                     const [applyResp, revokeResp] = await Promise.all([
-                        fetch(`${this.baseURL}/api/certificates/apply-requests`, { headers: { 'Authorization': `Bearer ${this.jwt}` } }),
-                        fetch(`${this.baseURL}/api/certificates/revoke-requests`, { headers: { 'Authorization': `Bearer ${this.jwt}` } })
+                        fetch(`./api/certificates/apply-requests`, { headers: { 'Authorization': `Bearer ${this.jwt}` } }),
+                        fetch(`./api/certificates/revoke-requests`, { headers: { 'Authorization': `Bearer ${this.jwt}` } })
                     ]);
                     const applyData = await applyResp.json();
                     const revokeData = await revokeResp.json();
@@ -144,7 +151,7 @@
             }
             async approveItem(type,id){
                 try{
-                    const url = type==='apply' ? `${this.baseURL}/api/certificates/apply-requests/${id}/approve` : `${this.baseURL}/api/certificates/revoke-requests/${id}/approve`;
+                    const url = type==='apply' ? `./api/certificates/apply-requests/${id}/approve` : `./api/certificates/revoke-requests/${id}/approve`;
                     const resp = await fetch(url,{method:'POST',headers:{'Authorization':`Bearer ${this.jwt}`}});
                     const data = await resp.json();
                     if(data && data.success){ this.showStatus('已同意', 'success'); await this.loadCombined(); } else { this.showStatus((data&&data.message)||'操作失败','error'); }
@@ -152,7 +159,7 @@
             }
             async rejectItem(type,id){
                 try{
-                    const url = type==='apply' ? `${this.baseURL}/api/certificates/apply-requests/${id}/reject` : `${this.baseURL}/api/certificates/revoke-requests/${id}/reject`;
+                    const url = type==='apply' ? `./api/certificates/apply-requests/${id}/reject` : `./api/certificates/revoke-requests/${id}/reject`;
                     const resp = await fetch(url,{method:'POST',headers:{'Content-Type':'application/json','Authorization':`Bearer ${this.jwt}`},body: JSON.stringify({ reason: '不通过' })});
                     const data = await resp.json();
                     if(data && data.success){ this.showStatus('已拒绝', 'success'); await this.loadCombined(); } else { this.showStatus((data&&data.message)||'操作失败','error'); }
@@ -161,7 +168,7 @@
 
             async loadUsers(){
                 try{
-                    const resp = await fetch(`${this.baseURL}/api/users`, { headers: { 'Authorization': `Bearer ${this.jwt}` } });
+                    const resp = await fetch(`./api/users`, { headers: { 'Authorization': `Bearer ${this.jwt}` } });
                     const data = await resp.json();
                     this.users = Array.isArray(data) ? data : (Array.isArray(data.data) ? data.data : []);
                     this.renderUsers();
@@ -181,9 +188,50 @@
                 });
             }
 
+            async loadCRL(){
+                try{
+                    const resp = await fetch(`./api/crl`);
+                    const data = await resp.json();
+                    this.crl = (data && data.success && Array.isArray(data.data)) ? data.data : [];
+                    this.renderCRL();
+                }catch(e){ this.crl=[]; this.renderCRL(); }
+            }
+
+            renderCRL(){
+                const list = document.getElementById('crlList');
+                list.innerHTML='';
+                const items = this.crl || [];
+                if(items.length===0){ list.innerHTML = '<div class="text-slate-600 text-sm">暂无吊销记录</div>'; return; }
+                items.forEach(x=>{
+                    const row = document.createElement('div');
+                    row.className='border border-slate-200 rounded-lg p-3 bg-white';
+                    row.innerHTML=`<div class='flex justify-between items-center'><div><div class='text-slate-900 font-medium'>CRL ID：${x.crlId??x.crlid??'-'}</div><div class='text-slate-600 text-sm'>原因：${x.reason||'-'}</div></div><div class='text-slate-700 text-sm'>时间：${this.fmt(x.revokeTime)||'-'}</div></div>`;
+                    list.appendChild(row);
+                });
+            }
+
+            toggleUserCRL(){
+                this.showCRL = !this.showCRL;
+                const usersList = document.getElementById('usersList');
+                const crlList = document.getElementById('crlList');
+                const label = document.getElementById('userCrlLabel');
+                const tgl = document.getElementById('toggleUserCRL');
+                if(this.showCRL){
+                    usersList.classList.add('hidden');
+                    crlList.classList.remove('hidden');
+                    label.textContent = 'CRL 列表';
+                    tgl.textContent = '显示用户';
+                }else{
+                    crlList.classList.add('hidden');
+                    usersList.classList.remove('hidden');
+                    label.textContent = '用户列表';
+                    tgl.textContent = '显示CRL';
+                }
+            }
+
             async loadLogs(){
                 try{
-                    const resp = await fetch(`${this.baseURL}/api/logs`, { headers: { 'Authorization': `Bearer ${this.jwt}` } });
+                    const resp = await fetch(`./api/logs`, { headers: { 'Authorization': `Bearer ${this.jwt}` } });
                     const data = await resp.json();
                     const list = document.getElementById('logsList');
                     list.innerHTML='';
