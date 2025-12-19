@@ -280,7 +280,14 @@
                 const resp = await fetch(`./api/certificates/my`, { headers: { 'Authorization': `Bearer ${this.jwt}` } });
                 const data = await resp.json();
                 if (data && data.success) {
-                    this.myCerts = Array.isArray(data.data) ? data.data : [];
+                    let list = Array.isArray(data.data) ? data.data : [];
+                    // 兼容后端可能返回的不同 ID 字段名
+                    list = list.map(item => {
+                        if (!item.certId && item.id) item.certId = item.id;
+                        if (!item.certId && item.CertID) item.certId = item.CertID;
+                        return item;
+                    });
+                    this.myCerts = list;
                     this.myCertsBySerial.clear();
                     this.myCerts.forEach(c => { if (c.serialNumber) this.myCertsBySerial.set(c.serialNumber, c); });
                     this.renderList(this.myCerts, true);
@@ -322,28 +329,13 @@
                 if (owned) revokeBtn.addEventListener('click', () => this.revokeCertificate(item));
                 const downloadBtn = row.querySelector('[data-action="download"]');
                 if (owned) {
-                     downloadBtn.addEventListener('click', async () => {
-                        let cid = item.certId;
-                        if (!cid) cid = await this.resolveCertIdBySerial(item.serialNumber);
-                        if (cid) this.downloadCertificateById(cid);
-                        else this.showStatus('无法获取证书ID，无法下载', 'error');
+                     downloadBtn.addEventListener('click', () => {
+                        if (item.serialNumber) this.downloadCertificateBySerial(item.serialNumber);
+                        else this.showStatus('无法获取证书序列号，无法下载', 'error');
                      });
                 }
                 listEl.appendChild(row);
             });
-        }
-
-        async resolveCertIdBySerial(serial) {
-            try {
-                const resp = await fetch(`./api/certificates/${serial}/verify`);
-                const data = await resp.json();
-                if (data && data.success && data.data && data.data.certId) return data.data.certId;
-                if (this.myCertsBySerial.has(serial)) {
-                    const mine = this.myCertsBySerial.get(serial);
-                    if (mine && mine.certId) return mine.certId;
-                }
-                return null;
-            } catch { return null; }
         }
 
         async parseCertificate(item) {
@@ -359,10 +351,9 @@
                 }
             } catch {}
             let subject = '', issuer = '', sigAlg = '';
-            // 普通用户的 my 列表通常不含 certId，无法下载 PEM；解析以 verify 信息为主
             try {
-                if (item.certId) {
-                    const resp = await fetch(`./api/certificates/${item.certId}/download`, { headers: { 'Authorization': `Bearer ${this.jwt}` } });
+                if (serial) {
+                    const resp = await fetch(`./api/certificates/${serial}/download`, { headers: { 'Authorization': `Bearer ${this.jwt}` } });
                     if (resp.ok) {
                         const pem = await resp.text();
                         const x = new X509();
@@ -421,8 +412,6 @@
                 if (data && data.success) {
                     const owned = this.myCertsBySerial.has(q);
                     const item = { serialNumber: q, owned, username: (data.data && data.data.username) || '' };
-                    if (data.data && data.data.certId) item.certId = data.data.certId;
-                    if (owned) { const mine = this.myCertsBySerial.get(q); item.certId = mine.certId; }
                     this.renderList([item], owned);
                 } else {
                     this.renderList([], false);
@@ -432,9 +421,9 @@
             }
         }
 
-        async downloadCertificateById(certId) {
+        async downloadCertificateBySerial(serial) {
             try {
-                const resp = await fetch(`./api/certificates/${certId}/download`, {
+                const resp = await fetch(`./api/certificates/${serial}/download`, {
                     method: 'GET',
                     headers: { 'Authorization': `Bearer ${this.jwt}` }
                 });
@@ -443,7 +432,7 @@
                 const url = window.URL.createObjectURL(blob);
                 const a = document.createElement('a');
                 a.href = url;
-                a.download = `certificate-${certId}.pem`;
+                a.download = `certificate-${serial}.pem`;
                 document.body.appendChild(a);
                 a.click();
                 a.remove();
