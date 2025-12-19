@@ -277,11 +277,10 @@
 
         async loadMyCertificates() {
             try {
-                const resp = await fetch(`./api/certificates`, { headers: { 'Authorization': `Bearer ${this.jwt}` } });
+                const resp = await fetch(`./api/certificates/my`, { headers: { 'Authorization': `Bearer ${this.jwt}` } });
                 const data = await resp.json();
-                if (data && data.success && Array.isArray(data.data)) {
-                    const mine = data.data.filter(c => c && c.user && c.user.username === this.username);
-                    this.myCerts = mine;
+                if (data && data.success) {
+                    this.myCerts = Array.isArray(data.data) ? data.data : [];
                     this.myCertsBySerial.clear();
                     this.myCerts.forEach(c => { if (c.serialNumber) this.myCertsBySerial.set(c.serialNumber, c); });
                     this.renderList(this.myCerts, true);
@@ -314,7 +313,7 @@
                             </div>
                             <div class="flex gap-2">
                                 <button class="px-3 py-2 bg-white border border-slate-300 rounded text-slate-900 hover:border-sky-400" data-action="parse">解析</button>
-                                <button class="px-3 py-2 bg-sky-600 text-white rounded ${item.certId ? '' : 'opacity-50 cursor-not-allowed'}" data-action="download">下载</button>
+                                <button class="px-3 py-2 bg-sky-600 text-white rounded ${owned ? '' : 'opacity-50 cursor-not-allowed'}" data-action="download">下载</button>
                                 <button class="px-3 py-2 bg-red-600 text-white rounded ${owned ? '' : 'opacity-50 cursor-not-allowed'}" data-action="revoke">吊销</button>
                             </div>
                         </div>`;
@@ -322,9 +321,37 @@
                 const revokeBtn = row.querySelector('[data-action="revoke"]');
                 if (owned) revokeBtn.addEventListener('click', () => this.revokeCertificate(item));
                 const downloadBtn = row.querySelector('[data-action="download"]');
-                if (item.certId) downloadBtn.addEventListener('click', () => this.downloadCertificateById(item.certId));
+                downloadBtn.addEventListener('click', async () => {
+                    if (!owned) return;
+                    let cid = item.certId;
+                    if (!cid) {
+                        cid = await this.resolveCertIdBySerial(item.serialNumber);
+                    }
+                    if (cid) {
+                        this.downloadCertificateById(cid);
+                    } else {
+                        this.showStatus('无法获取证书ID，无法下载', 'error');
+                    }
+                });
                 listEl.appendChild(row);
             });
+        }
+
+        async resolveCertIdBySerial(serial) {
+            try {
+                const resp = await fetch(`./api/certificates/${serial}/verify`);
+                const data = await resp.json();
+                if (data && data.success && data.data && data.data.certId) {
+                    return data.data.certId;
+                }
+                if (this.myCertsBySerial.has(serial)) {
+                    const mine = this.myCertsBySerial.get(serial);
+                    if (mine && mine.certId) return mine.certId;
+                }
+                return null;
+            } catch {
+                return null;
+            }
         }
 
         async parseCertificate(item) {
@@ -402,6 +429,7 @@
                 if (data && data.success) {
                     const owned = this.myCertsBySerial.has(q);
                     const item = { serialNumber: q, owned, username: (data.data && data.data.username) || '' };
+                    if (data.data && data.data.certId) item.certId = data.data.certId;
                     if (owned) { const mine = this.myCertsBySerial.get(q); item.certId = mine.certId; }
                     this.renderList([item], owned);
                 } else {
