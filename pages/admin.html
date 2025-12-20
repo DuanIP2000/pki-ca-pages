@@ -63,13 +63,13 @@
     <script>
         class AdminConsole {
             constructor(){
-                this.baseURL='http://localhost:8080';
+                this.baseURL='./';
                 this.jwt=sessionStorage.getItem('pki_jwt');
                 this.username=sessionStorage.getItem('pki_username');
                 this.init();
             }
             init(){
-                if(!this.jwt){window.location.href='./login.html';return}
+                if(!this.jwt){window.location.href='./index.html';return}
                 const welcome=document.getElementById('welcomeText');
                 if(welcome&&this.username)welcome.textContent=`欢迎，${this.username}`;
                 this.applyRequests=[];

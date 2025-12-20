@@ -46,9 +46,9 @@
                         <i class="fas fa-upload text-slate-400"></i>
                     </button>
                 </div>
-                <p class="text-slate-600 text-xs">私钥仅用于本地生成CSR与签名，不会被上传。</p>
+                <p class="text-slate-600 text-xs">私钥仅用于签名，不会被上传。</p>
 
-                <label class="block text-slate-700 text-sm font-medium">公钥文件（仅本地使用）</label>
+                <label class="block text-slate-700 text-sm font-medium">公钥文件</label>
                 <div class="relative">
                     <input type="file" id="applyPublicKey" accept=".pem,.key,.txt" class="hidden">
                     <button type="button" onclick="document.getElementById('applyPublicKey').click()" class="input-focus w-full px-4 py-3 bg-white border border-slate-300 rounded-lg text-slate-900 focus:outline-none focus:ring-2 focus:ring-sky-400 focus:border-sky-400 flex items-center justify-between">
@@ -56,8 +56,6 @@
                         <i class="fas fa-upload text-slate-400"></i>
                     </button>
                 </div>
-                <p class="text-slate-600 text-xs">公钥用于本地生成CSR，不会被上传。</p>
-
                 <button id="applyBtn" class="btn-hover w-full bg-gradient-to-r from-sky-600 to-blue-700 text-white font-bold py-3 px-4 rounded-lg focus:outline-none focus:ring-2 focus:ring-white focus:ring-opacity-50 disabled:opacity-50 disabled:cursor-not-allowed">
                     <span id="applyText"><i class="fas fa-paper-plane mr-2"></i>立即申请证书</span>
                     <span id="applyLoading" class="hidden"><i class="fas fa-spinner fa-spin mr-2"></i>正在申请...</span>
